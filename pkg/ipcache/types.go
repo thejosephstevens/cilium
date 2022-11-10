@@ -8,6 +8,8 @@ import (
 	"sort"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 
 	"github.com/cilium/cilium/pkg/ipcache/types"
 	"github.com/cilium/cilium/pkg/labels"
@@ -35,6 +37,9 @@ type resourceInfo struct {
 	labels           labels.Labels
 	source           source.Source
 	identityOverride overrideIdentity
+
+	tunnelPeer types.TunnelPeer
+	encryptKey types.EncryptKey
 }
 
 // IPMetadata is an empty interface intended to inform developers using the
@@ -56,6 +61,10 @@ func (m *resourceInfo) merge(info IPMetadata, src source.Source) {
 		m.labels = labels.NewFrom(info)
 	case overrideIdentity:
 		m.identityOverride = info
+	case types.TunnelPeer:
+		m.tunnelPeer = info
+	case types.EncryptKey:
+		m.encryptKey = info
 	default:
 		log.Errorf("BUG: Invalid IPMetadata passed to ipinfo.merge(): %+v", info)
 		return
@@ -70,6 +79,10 @@ func (m *resourceInfo) unmerge(info IPMetadata) {
 		m.labels = nil
 	case overrideIdentity:
 		m.identityOverride = false
+	case types.TunnelPeer:
+		m.tunnelPeer = types.TunnelPeer{}
+	case types.EncryptKey:
+		m.encryptKey = types.EncryptKeyEmpty
 	default:
 		log.Errorf("BUG: Invalid IPMetadata passed to ipinfo.unmerge(): %+v", info)
 		return
@@ -83,6 +96,12 @@ func (m *resourceInfo) isValid() bool {
 	if m.identityOverride {
 		return true
 	}
+	if m.tunnelPeer.IsValid() {
+		return true
+	}
+	if m.encryptKey.IsValid() {
+		return true
+	}
 	return false
 }
 
@@ -93,6 +112,15 @@ func (s prefixInfo) isValid() bool {
 		}
 	}
 	return false
+}
+
+func (s prefixInfo) sortedByResourceIDsAndSource() []types.ResourceID {
+	resourceIDs := maps.Keys(s)
+	slices.Sort(resourceIDs)
+	slices.SortFunc(resourceIDs, func(a, b types.ResourceID) bool {
+		return !source.AllowOverwrite(s[a].source, s[b].source)
+	})
+	return resourceIDs
 }
 
 func (s prefixInfo) ToLabels() labels.Labels {
@@ -111,6 +139,26 @@ func (s prefixInfo) Source() source.Source {
 		}
 	}
 	return src
+}
+
+func (s prefixInfo) EncryptKey() types.EncryptKey {
+	for _, resourceID := range s.sortedByResourceIDsAndSource() {
+		encryptKey := s[resourceID].encryptKey
+		if encryptKey.IsValid() {
+			return encryptKey
+		}
+	}
+	return types.EncryptKeyEmpty
+}
+
+func (s prefixInfo) TunnelPeer() types.TunnelPeer {
+	for _, resourceID := range s.sortedByResourceIDsAndSource() {
+		tunnelPeer := s[resourceID].tunnelPeer
+		if tunnelPeer.IsValid() {
+			return tunnelPeer
+		}
+	}
+	return types.TunnelPeer{}
 }
 
 // identityOverride extracts the labels of the pre-determined identity from
@@ -150,9 +198,17 @@ func (s prefixInfo) logConflicts(scopedLog *logrus.Entry) {
 	var (
 		override           labels.Labels
 		overrideResourceID types.ResourceID
+
+		tunnelPeer           types.TunnelPeer
+		tunnelPeerResourceID types.ResourceID
+
+		encryptKey           types.EncryptKey
+		encryptKeyResourceID types.ResourceID
 	)
 
-	for resourceID, info := range s {
+	for _, resourceID := range s.sortedByResourceIDsAndSource() {
+		info := s[resourceID]
+
 		if info.identityOverride {
 			if len(override) > 0 {
 				scopedLog.WithFields(logrus.Fields{
@@ -174,6 +230,36 @@ func (s prefixInfo) logConflicts(scopedLog *logrus.Entry) {
 			} else {
 				override = info.labels
 				overrideResourceID = resourceID
+			}
+		}
+
+		if info.tunnelPeer.IsValid() {
+			if tunnelPeer.IsValid() {
+				scopedLog.WithFields(logrus.Fields{
+					logfields.TunnelPeer:            tunnelPeer.String(),
+					logfields.Resource:              tunnelPeerResourceID,
+					logfields.ConflictingTunnelPeer: info.tunnelPeer.String(),
+					logfields.ConflictingResource:   resourceID,
+				}).Warning("Detected conflicting tunnel peer for prefix. " +
+					"This may cause connectivity issues for this address.")
+			} else {
+				tunnelPeer = info.tunnelPeer
+				tunnelPeerResourceID = resourceID
+			}
+		}
+
+		if info.encryptKey.IsValid() {
+			if encryptKey.IsValid() {
+				scopedLog.WithFields(logrus.Fields{
+					logfields.Key:                 encryptKey.String(),
+					logfields.Resource:            encryptKeyResourceID,
+					logfields.ConflictingKey:      info.encryptKey.String(),
+					logfields.ConflictingResource: resourceID,
+				}).Warning("Detected conflicting encryption key index for prefix. " +
+					"This may cause connectivity issues for this address.")
+			} else {
+				encryptKey = info.encryptKey
+				encryptKeyResourceID = resourceID
 			}
 		}
 	}
