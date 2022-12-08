@@ -210,11 +210,15 @@ func (d *Daemon) syncHostIPs() error {
 			}
 		}
 
+		ipv4Ident := identity.ReservedIdentityWorldIPv4
+		if !option.Config.EnableIPv6 {
+			ipv4Ident = identity.ReservedIdentityWorld
+		}
 		specialIdentities = append(specialIdentities,
 			identity.IPIdentityPair{
 				IP:   net.IPv4zero,
 				Mask: net.CIDRMask(0, net.IPv4len*8),
-				ID:   identity.ReservedIdentityWorld,
+				ID:   ipv4Ident,
 			})
 	}
 
@@ -239,11 +243,15 @@ func (d *Daemon) syncHostIPs() error {
 			}
 		}
 
+		ipv6Ident := identity.ReservedIdentityWorldIPv6
+		if !option.Config.EnableIPv4 {
+			ipv6Ident = identity.ReservedIdentityWorld
+		}
 		specialIdentities = append(specialIdentities,
 			identity.IPIdentityPair{
 				IP:   net.IPv6zero,
 				Mask: net.CIDRMask(0, net.IPv6len*8),
-				ID:   identity.ReservedIdentityWorld,
+				ID:   ipv6Ident,
 			})
 	}
 

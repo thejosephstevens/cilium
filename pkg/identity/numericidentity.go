@@ -105,6 +105,14 @@ const (
 	// ReservedIdentityIngress is the identity given to the IP used as the source
 	// address for connections from Ingress proxies.
 	ReservedIdentityIngress
+
+	// ReservedIdentityWorldIPv4 represents any endpoint outside of the cluster
+	// for IPv4 address only.
+	ReservedIdentityWorldIPv4
+
+	// ReservedIdentityWorldIPv6 represents any endpoint outside of the cluster
+	// for IPv6 address only.
+	ReservedIdentityWorldIPv6
 )
 
 // Special identities for well-known cluster components
