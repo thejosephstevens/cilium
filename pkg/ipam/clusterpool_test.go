@@ -61,7 +61,7 @@ func (f *fakeK8sCiliumNodeAPI) updateNode(newNode *ciliumv2.CiliumNode) error {
 		f.mutex.Unlock()
 		return fmt.Errorf("failed to update CiliumNode %q: node not found", newNode.Name)
 	}
-	f.node = newNode
+	f.node = newNode.DeepCopy()
 
 	sub := f.sub
 	onUpsertEvent := f.onUpsertEvent

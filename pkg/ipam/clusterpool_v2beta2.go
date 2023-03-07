@@ -21,7 +21,6 @@ import (
 	"github.com/cilium/cilium/pkg/ipam/types"
 	"github.com/cilium/cilium/pkg/k8s"
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
-	"github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/option"
@@ -69,7 +68,7 @@ type clusterPoolManager struct {
 
 var _ Allocator = (*clusterPoolV2Allocator)(nil)
 
-func newClusterPoolManager(conf Configuration, nodeWatcher nodeWatcher, owner Owner, clientset client.Clientset) *clusterPoolManager {
+func newClusterPoolManager(conf Configuration, nodeWatcher nodeWatcher, owner Owner, clientset nodeUpdater) *clusterPoolManager {
 	preallocMap, err := parsePreAllocMap(option.Config.IPAMClusterPoolNodePreAlloc)
 	if err != nil {
 		log.WithError(err).Fatalf("Invalid %s flag value", option.IPAMClusterPoolNodePreAlloc)
@@ -97,7 +96,7 @@ func newClusterPoolManager(conf Configuration, nodeWatcher nodeWatcher, owner Ow
 		node:            nil,
 		controller:      k8sController,
 		k8sUpdater:      k8sUpdater,
-		nodeUpdater:     clientset.CiliumV2().CiliumNodes(),
+		nodeUpdater:     clientset,
 		finishedRestore: false,
 	}
 
@@ -494,7 +493,7 @@ func (c *clusterPoolManager) allocateIP(ip net.IP, owner string, poolName Pool, 
 	return &AllocationResult{IP: ip}, nil
 }
 
-func (c *clusterPoolManager) releaseIP(ip net.IP, poolName Pool, family Family) error {
+func (c *clusterPoolManager) releaseIP(ip net.IP, poolName Pool, family Family, upstreamSync bool) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -504,7 +503,7 @@ func (c *clusterPoolManager) releaseIP(ip net.IP, poolName Pool, family Family) 
 	}
 
 	err := pool.release(ip)
-	if err == nil {
+	if err == nil && upstreamSync {
 		c.k8sUpdater.TriggerWithReason("release of IP")
 	}
 	return err
@@ -531,7 +530,7 @@ func (c *clusterPoolV2Allocator) AllocateWithoutSyncUpstream(ip net.IP, owner st
 }
 
 func (c *clusterPoolV2Allocator) Release(ip net.IP, pool Pool) error {
-	return c.manager.releaseIP(ip, pool, c.family)
+	return c.manager.releaseIP(ip, pool, c.family, true)
 }
 
 func (c *clusterPoolV2Allocator) AllocateNext(owner string, pool Pool) (*AllocationResult, error) {

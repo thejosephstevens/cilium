@@ -137,7 +137,7 @@ func NewIPAM(nodeAddressing types.NodeAddressing, c Configuration, owner Owner, 
 		}
 	case ipamOption.IPAMClusterPoolV2Beta2:
 		log.Info("Initializing ClusterPool v2beta IPAM")
-		manager := newClusterPoolManager(c, k8sEventReg, owner, clientset)
+		manager := newClusterPoolManager(c, k8sEventReg, owner, clientset.CiliumV2().CiliumNodes())
 
 		if c.IPv6Enabled() {
 			ipam.IPv6Allocator = manager.Allocator(IPv6)
