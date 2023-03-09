@@ -188,10 +188,6 @@ func (c *clusterPoolManager) ciliumNodeUpdated(newNode *ciliumv2.CiliumNode) {
 	// restore state from previous agent run, this collects (previously)
 	// released CIDRs and ensures they are not used for allocation in this instance either
 	if c.node == nil {
-		for _, pool := range newNode.Status.IPAM.Pools {
-			c.initPoolLocked(pool)
-		}
-
 		// This enables the upstream sync controller. It requires c.node to be populated.
 		// Note: The controller will only run after c.mutex is unlocked
 		c.controller.UpdateController(clusterPoolStatusControllerName, controller.ControllerParams{
@@ -219,8 +215,8 @@ func neededIPCeil(numIP int, preAlloc int) int {
 func (c *clusterPoolManager) updateCiliumNode(ctx context.Context) error {
 	c.mutex.Lock()
 	newNode := c.node.DeepCopy()
-	spec := []types.IPAMPoolRequest{}
-	status := []types.IPAMPoolStatus{}
+	requested := []types.IPAMPoolRequest{}
+	allocated := []types.IPAMPoolAllocation{}
 
 	// Only pools present in cluster-pool-node-pre-alloc can be requested
 	for poolName, preAlloc := range c.preallocMap {
@@ -235,37 +231,20 @@ func (c *clusterPoolManager) updateCiliumNode(ctx context.Context) error {
 			}
 		}
 
-		// Always round up to pre-alloc value
 		if c.conf.IPv4Enabled() {
 			neededIPv4 = neededIPCeil(neededIPv4, int(preAlloc))
+			if ok && pool.v4 != nil {
+				pool.v4.releaseExcessCIDRsV2(neededIPv4)
+			}
 		}
 		if c.conf.IPv6Enabled() {
 			neededIPv6 = neededIPCeil(neededIPv6, int(preAlloc))
-		}
-
-		if ok {
-			s := types.IPAMPoolStatus{
-				Pool:  poolName,
-				CIDRs: map[string]types.PodCIDRMapEntry{},
-			}
-
-			if pool.v4 != nil {
-				for releasedCIDR := range pool.v4.releaseExcessCIDRsV2(neededIPv4) {
-					s.CIDRs[releasedCIDR] = types.PodCIDRMapEntry{Status: types.PodCIDRStatusReleased}
-				}
-			}
-			if pool.v6 != nil {
-				for releasedCIDR := range pool.v6.releaseExcessCIDRsV2(neededIPv6) {
-					s.CIDRs[releasedCIDR] = types.PodCIDRMapEntry{Status: types.PodCIDRStatusReleased}
-				}
-			}
-
-			if len(s.CIDRs) > 0 {
-				status = append(status, s)
+			if ok && pool.v6 != nil {
+				pool.v6.releaseExcessCIDRsV2(neededIPv6)
 			}
 		}
 
-		spec = append(spec, types.IPAMPoolRequest{
+		requested = append(requested, types.IPAMPoolRequest{
 			Pool: poolName,
 			Needed: types.IPAMPoolDemand{
 				IPv4Addrs: neededIPv4,
@@ -273,71 +252,43 @@ func (c *clusterPoolManager) updateCiliumNode(ctx context.Context) error {
 			},
 		})
 	}
-	sort.Slice(spec, func(i, j int) bool {
-		return spec[i].Pool > spec[j].Pool
-	})
-	sort.Slice(status, func(i, j int) bool {
-		return status[i].Pool > status[j].Pool
-	})
 
-	newNode.Spec.IPAM.Pools.Requested = spec
-	newNode.Status.IPAM.Pools = status
+	// Write in-use pools to podCIDR. This removes any released pod CIDRs
+	for poolName, pool := range c.pools {
+		cidrs := []string{}
+		if pool.v4 != nil {
+			cidrs = append(cidrs, pool.v4.inUsePodCIDRs()...)
+		}
+		if pool.v6 != nil {
+			cidrs = append(cidrs, pool.v6.inUsePodCIDRs()...)
+		}
 
-	needsSpecUpdate := !newNode.Spec.IPAM.DeepEqual(&c.node.Spec.IPAM)
-	needsStatusUpdate := !newNode.Status.IPAM.DeepEqual(&c.node.Status.IPAM)
+		allocated = append(allocated, types.IPAMPoolAllocation{
+			Pool:  poolName,
+			CIDRs: cidrs,
+		})
+	}
+
+	sort.Slice(requested, func(i, j int) bool {
+		return requested[i].Pool > requested[j].Pool
+	})
+	sort.Slice(allocated, func(i, j int) bool {
+		return allocated[i].Pool > allocated[j].Pool
+	})
+	newNode.Spec.IPAM.Pools.Requested = requested
+	newNode.Spec.IPAM.Pools.Allocated = allocated
 
 	c.mutex.Unlock()
 
-	// TODO: Validate that this order of updates is safe with regard to CIDRs
-	// referred to in Spec vs Status. Especially need to check that the status
-	// update triggers the cilium-operator to re-check the spec (in case CIDRs
-	// were released)
-
 	var controllerErr error
-	if needsSpecUpdate {
+	if !newNode.Spec.IPAM.DeepEqual(&c.node.Spec.IPAM) {
 		_, err := c.nodeUpdater.Update(ctx, newNode, metav1.UpdateOptions{})
 		if err != nil {
 			controllerErr = multierr.Append(controllerErr, fmt.Errorf("failed to update node spec: %w", err))
 		}
 	}
 
-	if needsStatusUpdate {
-		_, err := c.nodeUpdater.UpdateStatus(ctx, newNode, metav1.UpdateOptions{})
-		if err != nil {
-			controllerErr = multierr.Append(controllerErr, fmt.Errorf("failed to update node status: %w", err))
-		}
-	}
-
-	// TODO: Should we refetch c.node if controllerErr != nil
 	return controllerErr
-}
-
-func (c *clusterPoolManager) initPoolLocked(pool types.IPAMPoolStatus) {
-	var releasedIPv4PodCIDRs, releasedIPv6PodCIDRs []string
-
-	for podCIDR, s := range pool.CIDRs {
-		if s.Status == types.PodCIDRStatusReleased {
-			switch podCIDRFamily(podCIDR) {
-			case IPv4:
-				releasedIPv4PodCIDRs = append(releasedIPv4PodCIDRs, podCIDR)
-			case IPv6:
-				releasedIPv6PodCIDRs = append(releasedIPv6PodCIDRs, podCIDR)
-			}
-		}
-	}
-
-	var ipv4Pool, ipv6Pool *podCIDRPool
-	if c.conf.IPv4Enabled() {
-		ipv4Pool = newPodCIDRPool(releasedIPv4PodCIDRs)
-	}
-	if c.conf.IPv6Enabled() {
-		ipv6Pool = newPodCIDRPool(releasedIPv6PodCIDRs)
-	}
-
-	c.pools[pool.Pool] = &poolPair{
-		v4: ipv4Pool,
-		v6: ipv6Pool,
-	}
 }
 
 func (c *clusterPoolManager) upsertPoolLocked(poolName string, podCIDRs []string) {

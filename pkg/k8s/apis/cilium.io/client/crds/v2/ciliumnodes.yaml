@@ -667,37 +667,6 @@ spec:
                     description: PodCIDRs lists the status of each pod CIDR allocated
                       to this node.
                     type: object
-                  pools:
-                    description: Pools lists all pools needed by this node. It contains
-                      the status of all assigned pools.
-                    items:
-                      description: IPAMPoolStatus describe the current usage of an
-                        IPAM pool allocation
-                      properties:
-                        cidrs:
-                          additionalProperties:
-                            properties:
-                              status:
-                                description: Status describes the status of a pod
-                                  CIDR
-                                enum:
-                                - released
-                                - depleted
-                                - in-use
-                                type: string
-                            type: object
-                          description: CIDRs contains the status of each CIDR allocated
-                            from this pool
-                          type: object
-                        pool:
-                          description: Pool is the name of the IPAM pool backing this
-                            allocation
-                          minLength: 1
-                          type: string
-                      required:
-                      - pool
-                      type: object
-                    type: array
                   release-ips:
                     additionalProperties:
                       description: IPReleaseStatus  defines the valid states in IP

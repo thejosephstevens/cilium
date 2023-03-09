@@ -10,7 +10,6 @@ import (
 
 	"github.com/cilium/ipam/service/ipallocator"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/exp/maps"
 
 	"github.com/cilium/cilium/pkg/cidr"
 	"github.com/cilium/cilium/pkg/defaults"
@@ -150,6 +149,12 @@ func (p *podCIDRPool) availablePodCIDRs() []*cidr.CIDR {
 	return podCIDRs
 }
 
+func (p *podCIDRPool) inUsePodCIDRs() []string {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	return p.inUsePodCIDRsLocked()
+}
+
 func (p *podCIDRPool) inUsePodCIDRsLocked() []string {
 	podCIDRs := make([]string, 0, len(p.ipAllocators))
 	for _, ipAllocator := range p.ipAllocators {
@@ -200,7 +205,7 @@ func (p *podCIDRPool) calculateIPsLocked() (totalUsed, totalFree int) {
 }
 
 // releaseExcessCIDRsLocked implements the logic for clusterpool-v2-beta
-func (p *podCIDRPool) releaseExcessCIDRsV2(neededIPs int) (released map[string]struct{}) {
+func (p *podCIDRPool) releaseExcessCIDRsV2(neededIPs int) {
 	// TODO double check: It seems  it's actually fine to use preAlloc as the
 	// threshold here, because neededIPCeil does not additionally round up
 	// if usedIPs is a multiple of preAlloc
@@ -214,35 +219,25 @@ func (p *podCIDRPool) releaseExcessCIDRsV2(neededIPs int) (released map[string]s
 
 	// Iterate over pod CIDRs in reverse order, so we prioritize releasing
 	// later pod CIDRs.
+	retainedAllocators := []*ipallocator.Range{}
 	for i := len(p.ipAllocators) - 1; i >= 0; i-- {
 		ipAllocator := p.ipAllocators[i]
 		cidrNet := ipAllocator.CIDR()
 		cidrStr := cidrNet.String()
-		if _, released := p.released[cidrStr]; released || ipAllocator.Used() > 0 {
-			// CIDR is either in use or already released
-			continue
-		}
 
-		if _, removed := p.removed[cidrStr]; removed {
-			// If the pod CIDR has been removed, then release it
-			p.released[cidrStr] = struct{}{}
-			delete(p.removed, cidrStr)
-			log.WithField(logfields.CIDR, cidrStr).Debug("releasing removed pod CIDR")
-			continue
-		}
-
+		// If the pod CIDR is not used and releasing it would
+		// not take us below the release threshold, then release it immediately
 		free := ipAllocator.Free()
-		if totalFree-free >= neededIPs {
-			// Otherwise, if the pod CIDR is not used and releasing it would
-			// not take us below the release threshold, then release it and
-			// mark it as released.
+		if ipAllocator.Used() == 0 && totalFree-free >= neededIPs {
 			p.released[cidrStr] = struct{}{}
 			totalFree -= free
 			log.WithField(logfields.CIDR, cidrStr).Debug("releasing pod CIDR")
+		} else {
+			retainedAllocators = append(retainedAllocators, ipAllocator)
 		}
 	}
 
-	return maps.Clone(p.released)
+	p.ipAllocators = retainedAllocators
 }
 
 // releaseExcessCIDRsLocked implements the logic for clusterpool-v2-beta

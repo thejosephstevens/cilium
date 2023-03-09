@@ -124,7 +124,10 @@ func (p *PoolAllocator) AllocateToNode(cn *v2.CiliumNode) error {
 	// handing out the same CIDR twice.
 	var err error
 
+	allocatedSet := make(map[string]map[netip.Prefix]struct{}, len(cn.Spec.IPAM.Pools.Allocated))
 	for _, allocatedPool := range cn.Spec.IPAM.Pools.Allocated {
+		allocatedSet[allocatedPool.Pool] = make(map[netip.Prefix]struct{}, len(allocatedPool.CIDRs))
+
 		for _, cidrStr := range allocatedPool.CIDRs {
 			prefix, parseErr := netip.ParsePrefix(cidrStr)
 			if parseErr != nil {
@@ -137,32 +140,16 @@ func (p *PoolAllocator) AllocateToNode(cn *v2.CiliumNode) error {
 			if occupyErr != nil {
 				err = multierr.Append(err, occupyErr)
 			}
+
+			allocatedSet[allocatedPool.Pool][prefix] = struct{}{}
 		}
 	}
 
-	for _, poolStatus := range cn.Status.IPAM.Pools {
-		for cidrStr, st := range poolStatus.CIDRs {
-			prefix, parseErr := netip.ParsePrefix(cidrStr)
-			if parseErr != nil {
-				err = multierr.Append(err,
-					fmt.Errorf("failed to parse CIDR of pool %q: %w", poolStatus.Pool, parseErr))
-				continue
-			}
-
-			// We either release or occupy any CIDR owned by the node. If it's
-			// not marked for release, we want to occupy it to avoid handing
-			// it out to other nodes
-			if st.Status == types.PodCIDRStatusReleased {
-				releaseErr := p.releaseCIDR(cn.Name, poolStatus.Pool, prefix)
-				if releaseErr != nil {
-					err = multierr.Append(err, releaseErr)
-				}
-			} else {
-				occupyErr := p.occupyCIDR(cn.Name, poolStatus.Pool, prefix)
-				if occupyErr != nil {
-					err = multierr.Append(err, occupyErr)
-				}
-			}
+	// release any cidrs no longer present in allocatedPool
+	for poolName := range p.nodes[cn.Name] {
+		retainErrs := p.retainCIDRs(cn.Name, poolName, allocatedSet[poolName])
+		if retainErrs != nil {
+			err = multierr.Append(err, retainErrs)
 		}
 	}
 
@@ -353,6 +340,32 @@ func (p *PoolAllocator) occupyCIDR(targetNode, sourcePool string, cidr netip.Pre
 	p.markAllocated(targetNode, sourcePool, cidr)
 
 	return nil
+}
+
+// retainCIDRs releases all CIDRs in sourcePool of targetNode if they are _not_ present in the retain set
+func (p *PoolAllocator) retainCIDRs(targetNode, sourcePool string, retain map[netip.Prefix]struct{}) (err error) {
+	for prefix := range p.nodes[targetNode][sourcePool].v4 {
+		if _, ok := retain[prefix]; ok {
+			continue
+		}
+
+		releaseErr := p.releaseCIDR(targetNode, sourcePool, prefix)
+		if releaseErr != nil {
+			err = multierr.Append(err, releaseErr)
+		}
+	}
+	for prefix := range p.nodes[targetNode][sourcePool].v6 {
+		if _, ok := retain[prefix]; ok {
+			continue
+		}
+
+		releaseErr := p.releaseCIDR(targetNode, sourcePool, prefix)
+		if releaseErr != nil {
+			err = multierr.Append(err, releaseErr)
+		}
+	}
+
+	return err
 }
 
 func (p *PoolAllocator) releaseCIDR(targetNode, sourcePool string, cidr netip.Prefix) error {

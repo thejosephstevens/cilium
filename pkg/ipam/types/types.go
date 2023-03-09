@@ -192,12 +192,6 @@ type IPAMStatus struct {
 	// +optional
 	PodCIDRs PodCIDRMap `json:"pod-cidrs,omitempty"`
 
-	// Pools lists all pools needed by this node. It contains the status of all
-	// assigned pools.
-	//
-	// +optional
-	Pools []IPAMPoolStatus `json:"pools,omitempty"`
-
 	// Operator is the Operator status of the node
 	//
 	// +optional
@@ -212,19 +206,6 @@ type IPAMStatus struct {
 	//
 	// +optional
 	ReleaseIPs map[string]IPReleaseStatus `json:"release-ips,omitempty"`
-}
-
-// IPAMPoolStatus describe the current usage of an IPAM pool allocation
-type IPAMPoolStatus struct {
-	// Pool is the name of the IPAM pool backing this allocation
-	//
-	// +kubebuilder:validation:MinLength=1
-	Pool string `json:"pool"`
-
-	// CIDRs contains the status of each CIDR allocated from this pool
-	//
-	// +optional
-	CIDRs PodCIDRMap `json:"cidrs,omitempty"`
 }
 
 // IPAMPoolRequest is a request from the agent to the operator, indicating how

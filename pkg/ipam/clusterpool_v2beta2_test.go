@@ -64,13 +64,9 @@ func Test_ClusterPoolManager(t *testing.T) {
 					{Pool: "mars", Needed: types.IPAMPoolDemand{IPv4Addrs: 8, IPv6Addrs: 8}},
 					{Pool: "default", Needed: types.IPAMPoolDemand{IPv4Addrs: 16, IPv6Addrs: 16}},
 				},
+				Allocated: []types.IPAMPoolAllocation{},
 			},
 		}},
-		Status: ciliumv2.NodeStatus{
-			IPAM: types.IPAMStatus{
-				Pools: []types.IPAMPoolStatus{},
-			},
-		},
 	}, currentNode)
 
 	// Assign CIDR to pools (i.e. this simulates the operator logic)
@@ -193,12 +189,14 @@ func Test_ClusterPoolManager(t *testing.T) {
 	}, currentNode.Spec.IPAM.Pools.Requested)
 
 	// Initial mars CIDR should have been marked as released now
-	assert.Equal(t, []types.IPAMPoolStatus{
+	assert.Equal(t, []types.IPAMPoolAllocation{
 		{
-			Pool: "mars",
-			CIDRs: map[string]types.PodCIDRMapEntry{
-				"10.0.11.0/27": {Status: types.PodCIDRStatusReleased},
-			},
+			Pool:  "mars",
+			CIDRs: []string{"10.0.12.0/27", "fd00:11::/123"},
 		},
-	}, currentNode.Status.IPAM.Pools)
+		{
+			Pool:  "default",
+			CIDRs: []string{"10.0.22.0/24", "fd00:22::/96"},
+		},
+	}, currentNode.Spec.IPAM.Pools.Allocated)
 }
