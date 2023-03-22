@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.uber.org/multierr"
-
 	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/ipam"
 	"github.com/cilium/cilium/pkg/ipam/allocator"
@@ -123,7 +121,7 @@ func (n *NodeHandler) upsertLocked(resource *v2.CiliumNode) bool {
 				_, err = n.nodeUpdater.Update(resource, newResource)
 				if err != nil {
 					refreshNode = true
-					controllerErr = multierr.Append(controllerErr, fmt.Errorf("failed to update spec: %w", err))
+					controllerErr = errors.Join(controllerErr, fmt.Errorf("failed to update spec: %w", err))
 				}
 			}
 
@@ -131,7 +129,7 @@ func (n *NodeHandler) upsertLocked(resource *v2.CiliumNode) bool {
 				_, err = n.nodeUpdater.UpdateStatus(resource, newResource)
 				if err != nil {
 					refreshNode = true
-					controllerErr = multierr.Append(controllerErr, fmt.Errorf("failed to update status: %w", err))
+					controllerErr = errors.Join(controllerErr, fmt.Errorf("failed to update status: %w", err))
 				}
 			}
 

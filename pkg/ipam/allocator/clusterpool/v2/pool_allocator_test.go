@@ -97,6 +97,9 @@ func TestPoolAllocator_AllocateToNode(t *testing.T) {
 				ready: true,
 			},
 			args: &v2.CiliumNode{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node1",
+				},
 				Spec: v2.NodeSpec{
 					IPAM: ipamTypes.IPAMSpec{
 						Pools: ipamTypes.IPAMPoolSpec{
@@ -114,6 +117,9 @@ func TestPoolAllocator_AllocateToNode(t *testing.T) {
 				},
 			},
 			want: &v2.CiliumNode{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node1",
+				},
 				Spec: v2.NodeSpec{
 					IPAM: ipamTypes.IPAMSpec{
 						Pools: ipamTypes.IPAMPoolSpec{
@@ -136,7 +142,7 @@ func TestPoolAllocator_AllocateToNode(t *testing.T) {
 					},
 				},
 			},
-			wantErr: fmt.Errorf("ipv6: %w", errPoolEmpty).Error(),
+			wantErr: fmt.Errorf(`failed to allocate ipv6 address for node "node1" from pool "default": %w`, errPoolEmpty).Error(),
 		},
 		{
 			name: "basic default pool",

@@ -11,7 +11,6 @@ import (
 	"sort"
 
 	"github.com/sirupsen/logrus"
-	"go.uber.org/multierr"
 
 	"github.com/cilium/cilium/pkg/ipam"
 	"github.com/cilium/cilium/pkg/ipam/allocator/clusterpool/cidralloc"
@@ -131,14 +130,14 @@ func (p *PoolAllocator) AllocateToNode(cn *v2.CiliumNode) error {
 		for _, cidrStr := range allocatedPool.CIDRs {
 			prefix, parseErr := netip.ParsePrefix(cidrStr)
 			if parseErr != nil {
-				err = multierr.Append(err,
+				err = errors.Join(err,
 					fmt.Errorf("failed to parse CIDR of pool %q: %w", allocatedPool.Pool, parseErr))
 				continue
 			}
 
 			occupyErr := p.occupyCIDR(cn.Name, allocatedPool.Pool, prefix)
 			if occupyErr != nil {
-				err = multierr.Append(err, occupyErr)
+				err = errors.Join(err, occupyErr)
 			}
 
 			allocatedSet[allocatedPool.Pool][prefix] = struct{}{}
@@ -149,7 +148,7 @@ func (p *PoolAllocator) AllocateToNode(cn *v2.CiliumNode) error {
 	for poolName := range p.nodes[cn.Name] {
 		retainErrs := p.retainCIDRs(cn.Name, poolName, allocatedSet[poolName])
 		if retainErrs != nil {
-			err = multierr.Append(err, retainErrs)
+			err = errors.Join(err, retainErrs)
 		}
 	}
 
@@ -169,7 +168,9 @@ func (p *PoolAllocator) AllocateToNode(cn *v2.CiliumNode) error {
 
 			allocErr := p.allocateCIDRs(cn.Name, reqPool.Pool, ipam.IPv4, neededIPv4Addrs)
 			if allocErr != nil {
-				err = multierr.Append(err, fmt.Errorf("ipv4: %w", allocErr))
+				err = errors.Join(err,
+					fmt.Errorf("failed to allocate ipv4 address for node %q from pool %q: %w",
+						cn.Name, reqPool.Pool, allocErr))
 			}
 		}
 		if option.Config.EnableIPv6 {
@@ -178,7 +179,9 @@ func (p *PoolAllocator) AllocateToNode(cn *v2.CiliumNode) error {
 
 			allocErr := p.allocateCIDRs(cn.Name, reqPool.Pool, ipam.IPv6, neededIPv4Addrs)
 			if allocErr != nil {
-				err = multierr.Append(err, fmt.Errorf("ipv6: %w", allocErr))
+				err = errors.Join(err,
+					fmt.Errorf("failed to allocate ipv6 address for node %q from pool %q: %w",
+						cn.Name, reqPool.Pool, allocErr))
 			}
 		}
 	}
@@ -191,16 +194,16 @@ func (p *PoolAllocator) ReleaseNode(nodeName string) error {
 	for poolName, cidrs := range p.nodes[nodeName] {
 		pool, ok := p.pools[poolName]
 		if !ok {
-			err = multierr.Append(err,
+			err = errors.Join(err,
 				fmt.Errorf("cannot release from non-existing pool: %s", poolName))
 			continue
 		}
 
 		for cidr := range cidrs.v4 {
-			multierr.AppendInto(&err, releaseCIDR(pool.v4, cidr))
+			err = errors.Join(err, releaseCIDR(pool.v4, cidr))
 		}
 		for cidr := range cidrs.v6 {
-			multierr.AppendInto(&err, releaseCIDR(pool.v6, cidr))
+			err = errors.Join(err, releaseCIDR(pool.v6, cidr))
 		}
 	}
 
@@ -351,7 +354,7 @@ func (p *PoolAllocator) retainCIDRs(targetNode, sourcePool string, retain map[ne
 
 		releaseErr := p.releaseCIDR(targetNode, sourcePool, prefix)
 		if releaseErr != nil {
-			err = multierr.Append(err, releaseErr)
+			err = errors.Join(err, releaseErr)
 		}
 	}
 	for prefix := range p.nodes[targetNode][sourcePool].v6 {
@@ -361,7 +364,7 @@ func (p *PoolAllocator) retainCIDRs(targetNode, sourcePool string, retain map[ne
 
 		releaseErr := p.releaseCIDR(targetNode, sourcePool, prefix)
 		if releaseErr != nil {
-			err = multierr.Append(err, releaseErr)
+			err = errors.Join(err, releaseErr)
 		}
 	}
 
