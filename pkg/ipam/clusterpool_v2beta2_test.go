@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright Authors of Cilium
+
 package ipam
 
 import (
@@ -10,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/cilium/cilium/pkg/cidr"
 	"github.com/cilium/cilium/pkg/ipam/types"
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
@@ -69,20 +73,25 @@ func Test_ClusterPoolManager(t *testing.T) {
 		}},
 	}, currentNode)
 
+	marsIPv4CIDR1 := cidr.MustParseCIDR("10.0.11.0/27")
+	marsIPv6CIDR1 := cidr.MustParseCIDR("fd00:11::/123")
+	defaultIPv4CIDR1 := cidr.MustParseCIDR("10.0.22.0/24")
+	defaultIPv6CIDR1 := cidr.MustParseCIDR("fd00:22::/96")
+
 	// Assign CIDR to pools (i.e. this simulates the operator logic)
 	currentNode.Spec.IPAM.Pools.Allocated = []types.IPAMPoolAllocation{
 		{
 			Pool: "mars",
 			CIDRs: []string{
-				"fd00:11::/123",
-				"10.0.11.0/27",
+				marsIPv6CIDR1.String(),
+				marsIPv4CIDR1.String(),
 			},
 		},
 		{
 			Pool: "default",
 			CIDRs: []string{
-				"fd00:22::/96",
-				"10.0.22.0/24",
+				defaultIPv6CIDR1.String(),
+				defaultIPv4CIDR1.String(),
 			},
 		},
 	}
@@ -116,6 +125,7 @@ func Test_ClusterPoolManager(t *testing.T) {
 		// set upstreamSync to true for last allocation, to ensure we only get one upsert event
 		ar, err := c.allocateNext(fmt.Sprintf("mars-pod-%d", i), "mars", IPv4, i == numMarsIPs-1)
 		assert.Nil(t, err)
+		assert.True(t, marsIPv4CIDR1.Contains(ar.IP))
 		allocatedMarsIPs = append(allocatedMarsIPs, ar.IP)
 	}
 	_, err = c.allocateNext("mars-pod-overflow", "mars", IPv4, false)
@@ -140,21 +150,23 @@ func Test_ClusterPoolManager(t *testing.T) {
 		},
 	}, currentNode.Spec.IPAM.Pools.Requested)
 
+	marsIPv4CIDR2 := cidr.MustParseCIDR("10.0.12.0/27")
+
 	// Assign additional mars IPv4 CIDR
 	currentNode.Spec.IPAM.Pools.Allocated = []types.IPAMPoolAllocation{
 		{
 			Pool: "mars",
 			CIDRs: []string{
-				"fd00:11::/123",
-				"10.0.11.0/27",
-				"10.0.12.0/27",
+				marsIPv6CIDR1.String(),
+				marsIPv4CIDR1.String(),
+				marsIPv4CIDR2.String(),
 			},
 		},
 		{
 			Pool: "default",
 			CIDRs: []string{
-				"fd00:22::/96",
-				"10.0.22.0/24",
+				defaultIPv6CIDR1.String(),
+				defaultIPv4CIDR1.String(),
 			},
 		},
 	}
@@ -164,6 +176,7 @@ func Test_ClusterPoolManager(t *testing.T) {
 	// Should now be able to allocate from mars pool again
 	ar, err = c.allocateNext("mars-pod-overflow", "mars", IPv4, false)
 	assert.Nil(t, err)
+	assert.True(t, marsIPv4CIDR2.Contains(ar.IP))
 
 	// Deallocate all other IPs from mars pool. This should release the old CIDR
 	for i, ip := range allocatedMarsIPs {
@@ -192,11 +205,11 @@ func Test_ClusterPoolManager(t *testing.T) {
 	assert.Equal(t, []types.IPAMPoolAllocation{
 		{
 			Pool:  "mars",
-			CIDRs: []string{"10.0.12.0/27", "fd00:11::/123"},
+			CIDRs: []string{marsIPv4CIDR2.String(), marsIPv6CIDR1.String()},
 		},
 		{
 			Pool:  "default",
-			CIDRs: []string{"10.0.22.0/24", "fd00:22::/96"},
+			CIDRs: []string{defaultIPv4CIDR1.String(), defaultIPv6CIDR1.String()},
 		},
 	}, currentNode.Spec.IPAM.Pools.Allocated)
 }
