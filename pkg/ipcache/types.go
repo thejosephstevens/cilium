@@ -17,11 +17,11 @@ import (
 	"github.com/cilium/cilium/pkg/source"
 )
 
-// prefixInfo holds all of the information (labels, etc.) about a given prefix
+// PrefixInfo holds all of the information (labels, etc.) about a given prefix
 // independently based on the ResourceID of the origin of that information, and
 // provides convenient accessors to consistently merge the stored information
 // to generate ipcache output based on a range of inputs.
-type prefixInfo map[types.ResourceID]*resourceInfo
+type PrefixInfo map[types.ResourceID]*resourceInfo
 
 // IdentityOverride can be used to override the identity of a given prefix.
 // Must be provided together with a set of labels. Any other labels associated
@@ -105,7 +105,7 @@ func (m *resourceInfo) isValid() bool {
 	return false
 }
 
-func (s prefixInfo) isValid() bool {
+func (s PrefixInfo) isValid() bool {
 	for _, v := range s {
 		if v.isValid() {
 			return true
@@ -114,7 +114,7 @@ func (s prefixInfo) isValid() bool {
 	return false
 }
 
-func (s prefixInfo) sortedByResourceIDsAndSource() []types.ResourceID {
+func (s PrefixInfo) sortedByResourceIDsAndSource() []types.ResourceID {
 	resourceIDs := maps.Keys(s)
 	slices.Sort(resourceIDs)
 	slices.SortFunc(resourceIDs, func(a, b types.ResourceID) bool {
@@ -123,7 +123,7 @@ func (s prefixInfo) sortedByResourceIDsAndSource() []types.ResourceID {
 	return resourceIDs
 }
 
-func (s prefixInfo) ToLabels() labels.Labels {
+func (s PrefixInfo) ToLabels() labels.Labels {
 	l := labels.NewLabelsFromModel(nil)
 	for _, v := range s {
 		l.MergeLabels(v.labels)
@@ -131,7 +131,7 @@ func (s prefixInfo) ToLabels() labels.Labels {
 	return l
 }
 
-func (s prefixInfo) Source() source.Source {
+func (s PrefixInfo) Source() source.Source {
 	src := source.Unspec
 	for _, v := range s {
 		if source.AllowOverwrite(src, v.source) {
@@ -141,7 +141,7 @@ func (s prefixInfo) Source() source.Source {
 	return src
 }
 
-func (s prefixInfo) EncryptKey() types.EncryptKey {
+func (s PrefixInfo) EncryptKey() types.EncryptKey {
 	for _, resourceID := range s.sortedByResourceIDsAndSource() {
 		encryptKey := s[resourceID].encryptKey
 		if encryptKey.IsValid() {
@@ -151,7 +151,7 @@ func (s prefixInfo) EncryptKey() types.EncryptKey {
 	return types.EncryptKeyEmpty
 }
 
-func (s prefixInfo) TunnelPeer() types.TunnelPeer {
+func (s PrefixInfo) TunnelPeer() types.TunnelPeer {
 	for _, resourceID := range s.sortedByResourceIDsAndSource() {
 		tunnelPeer := s[resourceID].tunnelPeer
 		if tunnelPeer.IsValid() {
@@ -165,7 +165,7 @@ func (s prefixInfo) TunnelPeer() types.TunnelPeer {
 // the prefix info. If no override identity is present, this returns nil.
 // This pre-determined identity will overwrite any other identity which may
 // be derived from the prefix labels.
-func (s prefixInfo) identityOverride() (lbls labels.Labels, hasOverride bool) {
+func (s PrefixInfo) identityOverride() (lbls labels.Labels, hasOverride bool) {
 	identities := make([]labels.Labels, 0, 1)
 	for _, info := range s {
 		// We emit a warning in logConflicts if an identity override
@@ -194,7 +194,7 @@ func (s prefixInfo) identityOverride() (lbls labels.Labels, hasOverride bool) {
 	return identities[0], true
 }
 
-func (s prefixInfo) logConflicts(scopedLog *logrus.Entry) {
+func (s PrefixInfo) logConflicts(scopedLog *logrus.Entry) {
 	var (
 		override           labels.Labels
 		overrideResourceID types.ResourceID
