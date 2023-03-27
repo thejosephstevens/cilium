@@ -91,7 +91,7 @@ var _ = Describe("K8sUpdates", func() {
 		cmd := kubectl.ExecMiddle(fmt.Sprintf("mkdir -p %s && "+
 			"cd %s &&"+
 			"wget https://github.com/cilium/cilium/archive/refs/heads/%s.zip &&"+
-			"unzip %s.zip",
+			"tar -xf %s.tar.gz",
 			versionPath,
 			versionPath,
 			helpers.CiliumStableVersion,
