@@ -89,8 +89,8 @@ var _ = Describe("K8sUpdates", func() {
 		stableChartPath = filepath.Join(versionPath, fmt.Sprintf("cilium-%s/install/kubernetes/cilium", helpers.CiliumStableHelmChartVersion))
 
 		cmd := kubectl.ExecMiddle(fmt.Sprintf("mkdir -p %s && "+
-			"cd %s &&"+
-			"wget https://github.com/cilium/cilium/archive/refs/heads/%s.zip &&"+
+			"cd %s && "+
+			"wget https://github.com/cilium/cilium/archive/refs/heads/%s.tar.gz && "+
 			"tar -xf %s.tar.gz",
 			versionPath,
 			versionPath,
