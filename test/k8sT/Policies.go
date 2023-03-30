@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -1109,7 +1110,7 @@ var _ = SkipDescribeIf(func() bool {
 				Expect(len(podList.Items)).To(Equal(1))
 				ciliumPod = podList.Items[0].Name
 				app1PodIP = app1PodModel.Status.PodIP
-				//var app1Ep *models.Endpoint
+				// var app1Ep *models.Endpoint
 				var endpoints []*models.Endpoint
 				err = kubectl.ExecPodCmd(helpers.CiliumNamespace, ciliumPod, "cilium endpoint list -o json").Unmarshal(&endpoints)
 				Expect(err).To(BeNil())
@@ -1464,9 +1465,17 @@ var _ = SkipDescribeIf(func() bool {
 				monitor, monitorCancel := kubectl.MonitorEndpointStart(ciliumPod, ep.ID)
 
 				By("Importing fromCIDR+toPorts policy on ingress")
-				cnpAllowIngress := helpers.ManifestGet(kubectl.BasePath(),
-					"cnp-ingress-from-cidr-to-ports.yaml")
-				importPolicy(kubectl, testNamespace, cnpAllowIngress, "ingress-from-cidr-to-ports")
+
+				originalAssignIPYAML := helpers.ManifestGet(kubectl.BasePath(), "cnp-ingress-from-cidr-to-ports.yaml")
+				res := kubectl.ExecMiddle("mktemp")
+				res.ExpectSuccess()
+				cnpAllowIngressWithIP := strings.Trim(res.Stdout(), "\n")
+				nodeIP, err := kubectl.GetNodeIPByLabel(helpers.GetNodeWithoutCilium(), false)
+				Expect(err).Should(BeNil())
+				kubectl.ExecMiddle(fmt.Sprintf("sed 's/NODE_WITHOUT_CILIUM_IP/%s/' %s > %s",
+					nodeIP, originalAssignIPYAML, cnpAllowIngressWithIP)).ExpectSuccess()
+
+				importPolicy(kubectl, testNamespace, cnpAllowIngressWithIP, "ingress-from-cidr-to-ports")
 				count := testConnectivity(backendPodIP, true)
 				defer monitorCancel()
 
@@ -1542,9 +1551,16 @@ var _ = SkipDescribeIf(func() bool {
 					monitor, monitorCancel := kubectl.MonitorEndpointStart(ciliumPod, hostEpID)
 
 					By("Importing fromCIDR+toPorts host policy on ingress")
-					ccnpAllowHostIngress := helpers.ManifestGet(kubectl.BasePath(),
-						"ccnp-host-ingress-from-cidr-to-ports.yaml")
-					importPolicy(kubectl, testNamespace, ccnpAllowHostIngress, "host-ingress-from-cidr-to-ports")
+					originalCCNPAllowHostIngress := helpers.ManifestGet(kubectl.BasePath(), "ccnp-host-ingress-from-cidr-to-ports.yaml")
+					res := kubectl.ExecMiddle("mktemp")
+					res.ExpectSuccess()
+					ccnpAllowIngressWithIP := strings.Trim(res.Stdout(), "\n")
+					nodeIP, err := kubectl.GetNodeIPByLabel(helpers.GetNodeWithoutCilium(), false)
+					Expect(err).Should(BeNil())
+					kubectl.ExecMiddle(fmt.Sprintf("sed 's/NODE_WITHOUT_CILIUM_IP/%s/' %s > %s",
+						nodeIP, originalCCNPAllowHostIngress, ccnpAllowIngressWithIP)).ExpectSuccess()
+
+					importPolicy(kubectl, testNamespace, ccnpAllowIngressWithIP, "host-ingress-from-cidr-to-ports")
 
 					testConnectivity(backendPodIP, true)
 					count := testConnectivity(hostIPOfBackendPod, true)
@@ -2338,7 +2354,7 @@ var _ = SkipDescribeIf(func() bool {
 		})
 	})
 
-	//TODO: Check service with IPV6
+	// TODO: Check service with IPV6
 
 	Context("External services", func() {
 		var (
@@ -2456,8 +2472,8 @@ var _ = SkipDescribeIf(func() bool {
 // This Describe block is needed to run some tests in GKE. For example, the
 // kube-apiserver policy matching feature needs coverage on GKE as there are
 // two cases for that feature:
-//   * kube-apiserver running within the cluster (Vagrant VMs)
-//   * kube-apiserver running outside of the cluster (GKE)
+//   - kube-apiserver running within the cluster (Vagrant VMs)
+//   - kube-apiserver running outside of the cluster (GKE)
 var _ = SkipDescribeIf(helpers.DoesNotRunOn419OrLaterKernel,
 	"K8sPolicyTestExtended", func() {
 		var (
