@@ -3729,6 +3729,11 @@ func (kub *Kubectl) GetCiliumPodOnNode(label string) (string, error) {
 	return kub.getCiliumPodOnNodeByName(node)
 }
 
+// GetCiliumPodOnNodeByName returns the name of the Cilium pod that is running on node with the given name.
+func (kub *Kubectl) GetCiliumPodOnNodeByName(nodeName string) (string, error) {
+	return kub.getCiliumPodOnNodeByName(nodeName)
+}
+
 func (kub *Kubectl) validateCilium() error {
 	var g errgroup.Group
 
