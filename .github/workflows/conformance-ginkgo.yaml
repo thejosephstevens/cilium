@@ -1,0 +1,716 @@
+name: Cilium Test
+
+# Any change in triggers needs to be reflected in the concurrency group.
+on:
+  push:
+    branches:
+      - pr/aanm-test-test-test
+
+# By specifying the access of one of the scopes, all of those that are not
+# specified are set to 'none'.
+permissions:
+  # To be able to access the repository with actions/checkout
+  contents: read
+  # To allow retrieving information from the PR API
+  pull-requests: read
+  # So that Sibz/github-status-action can write into the status API
+  statuses: write
+
+env:
+  check_url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+# List of K8s tests
+###
+# 1
+# K8sAgentChaosTest Connectivity demo application Endpoint can still connect while Cilium is not running
+# K8sAgentChaosTest Restart with long lived connections L3/L4 policies still work while Cilium is restarted
+# K8sAgentChaosTest Restart with long lived connections TCP connection is not dropped when cilium restarts
+###
+# 2
+# K8sAgentFQDNTest Restart Cilium validate that FQDN is still working
+# K8sAgentFQDNTest Validate that FQDN policy continues to work after being updated
+# K8sAgentFQDNTest Validate that multiple specs are working correctly
+# K8sAgentPerNodeConfigTest Correctly computes config overrides
+###
+# 3
+# K8sAgentPolicyTest Clusterwide policies Test clusterwide connectivity with policies
+# K8sAgentPolicyTest External services To Services first endpoint creation
+# K8sAgentPolicyTest External services To Services first endpoint creation match service by labels
+# K8sAgentPolicyTest External services To Services first policy
+# K8sAgentPolicyTest External services To Services first policy, match service by labels
+# K8sAgentPolicyTest Namespaces policies Cilium Network policy using namespace label and L7
+# K8sAgentPolicyTest Namespaces policies Kubernetes Network Policy by namespace selector
+# K8sAgentPolicyTest Namespaces policies Tests the same Policy in different namespaces
+###
+# 4
+# K8sAgentPolicyTest Multi-node policy test validates fromEntities policies Validates fromEntities all policy
+# K8sAgentPolicyTest Multi-node policy test validates fromEntities policies Validates fromEntities cluster policy
+# K8sAgentPolicyTest Multi-node policy test validates fromEntities policies with remote-node identity disabled Allows from all hosts with cnp fromEntities host policy
+# K8sAgentPolicyTest Multi-node policy test validates fromEntities policies with remote-node identity enabled Validates fromEntities remote-node policy
+# K8sAgentPolicyTest Multi-node policy test validates ingress CIDR-dependent L4 connectivity is blocked after denying ingress
+# K8sAgentPolicyTest Multi-node policy test validates ingress CIDR-dependent L4 connectivity is restored after importing ingress policy
+# K8sAgentPolicyTest Multi-node policy test validates ingress CIDR-dependent L4 connectivity works from the outside before any policies
+# K8sAgentPolicyTest Multi-node policy test validates ingress CIDR-dependent L4 With host policy Connectivity is restored after importing ingress policy
+# K8sAgentPolicyTest Multi-node policy test validates ingress CIDR-dependent L4 With host policy Connectivity to hostns is blocked after denying ingress
+# K8sAgentPolicyTest Multi-node policy test with L7 policy using connectivity-check to check datapath
+###
+# 5
+# K8sAgentPolicyTest Basic Test Invalid Policy report status correctly
+# K8sAgentPolicyTest Basic Test Traffic redirections to proxy Tests DNS proxy visibility without policy
+# K8sAgentPolicyTest Basic Test Traffic redirections to proxy Tests HTTP proxy visibility without policy
+# K8sAgentPolicyTest Basic Test Traffic redirections to proxy Tests proxy visibility interactions with policy lifecycle operations
+# K8sPolicyTestExtended Validate toEntities KubeAPIServer Allows connection to KubeAPIServer
+# K8sPolicyTestExtended Validate toEntities KubeAPIServer Denies connection to KubeAPIServer
+# K8sPolicyTestExtended Validate toEntities KubeAPIServer Still allows connection to KubeAPIServer with a duplicate policy
+###
+# 61
+# K8sDatapathConfig Host firewall Check connectivity with IPv6 disabled
+# K8sDatapathConfig Host firewall With native routing
+# K8sDatapathConfig Host firewall With native routing and endpoint routes
+# K8sDatapathConfig Host firewall With VXLAN
+# K8sDatapathConfig Host firewall With VXLAN and endpoint routes
+###
+# 62
+# K8sDatapathConfig Check BPF masquerading with ip-masq-agent DirectRouting
+# K8sDatapathConfig Check BPF masquerading with ip-masq-agent VXLAN
+# K8sDatapathConfig Encapsulation Check iptables masquerading without random-fully
+# K8sDatapathConfig Encapsulation Check iptables masquerading with random-fully
+# K8sDatapathConfig Etcd Check connectivity
+# K8sDatapathConfig Iptables Skip conntrack for pod traffic
+# K8sDatapathConfig IPv4Only Check connectivity with IPv6 disabled
+# K8sDatapathConfig IPv6 masquerading
+# K8sDatapathConfig MonitorAggregation Checks that monitor aggregation flags send notifications
+# K8sDatapathConfig MonitorAggregation Checks that monitor aggregation restricts notifications
+# K8sDatapathConfig Transparent encryption DirectRouting
+###
+# 7
+# K8sAgentHubbleTest Hubble Observe
+# K8sAgentIstioTest
+# K8sDatapathBandwidthTest Checks Bandwidth Rate-Limiting Checks Pod to Pod bandwidth, direct routing
+# K8sDatapathBandwidthTest Checks Bandwidth Rate-Limiting Checks Pod to Pod bandwidth, geneve tunneling
+# K8sDatapathBandwidthTest Checks Bandwidth Rate-Limiting Checks Pod to Pod bandwidth, vxlan tunneling
+###
+# 81
+# K8sDatapathEgressGatewayTest tunnel disabled with endpointRoutes disabled and XDP egress gw policy both egress gw and basic connectivity work
+# K8sDatapathEgressGatewayTest tunnel disabled with endpointRoutes disabled and XDP egress gw policy with exclusion CIDRs Traffic is not SNATed with egress gateway IP
+# K8sDatapathEgressGatewayTest tunnel disabled with endpointRoutes disabled and XDP no egress gw policy connectivity works
+# K8sDatapathEgressGatewayTest tunnel disabled with endpointRoutes disabled egress gw policy both egress gw and basic connectivity work
+# K8sDatapathEgressGatewayTest tunnel disabled with endpointRoutes disabled egress gw policy with exclusion CIDRs Traffic is not SNATed with egress gateway IP
+# K8sDatapathEgressGatewayTest tunnel disabled with endpointRoutes disabled no egress gw policy connectivity works
+# K8sDatapathEgressGatewayTest tunnel disabled with endpointRoutes enabled and XDP egress gw policy both egress gw and basic connectivity work
+# K8sDatapathEgressGatewayTest tunnel disabled with endpointRoutes enabled and XDP egress gw policy with exclusion CIDRs Traffic is not SNATed with egress gateway IP
+# K8sDatapathEgressGatewayTest tunnel disabled with endpointRoutes enabled and XDP no egress gw policy connectivity works
+# K8sDatapathEgressGatewayTest tunnel disabled with endpointRoutes enabled egress gw policy both egress gw and basic connectivity work
+# K8sDatapathEgressGatewayTest tunnel disabled with endpointRoutes enabled egress gw policy with exclusion CIDRs Traffic is not SNATed with egress gateway IP
+# K8sDatapathEgressGatewayTest tunnel disabled with endpointRoutes enabled no egress gw policy connectivity works
+###
+# 82
+# K8sDatapathEgressGatewayTest tunnel vxlan with endpointRoutes disabled and XDP egress gw policy both egress gw and basic connectivity work
+# K8sDatapathEgressGatewayTest tunnel vxlan with endpointRoutes disabled and XDP egress gw policy with exclusion CIDRs Traffic is not SNATed with egress gateway IP
+# K8sDatapathEgressGatewayTest tunnel vxlan with endpointRoutes disabled and XDP no egress gw policy connectivity works
+# K8sDatapathEgressGatewayTest tunnel vxlan with endpointRoutes disabled egress gw policy both egress gw and basic connectivity work
+# K8sDatapathEgressGatewayTest tunnel vxlan with endpointRoutes disabled egress gw policy with exclusion CIDRs Traffic is not SNATed with egress gateway IP
+# K8sDatapathEgressGatewayTest tunnel vxlan with endpointRoutes disabled no egress gw policy connectivity works
+# K8sDatapathEgressGatewayTest tunnel vxlan with endpointRoutes enabled and XDP egress gw policy both egress gw and basic connectivity work
+# K8sDatapathEgressGatewayTest tunnel vxlan with endpointRoutes enabled and XDP egress gw policy with exclusion CIDRs Traffic is not SNATed with egress gateway IP
+# K8sDatapathEgressGatewayTest tunnel vxlan with endpointRoutes enabled and XDP no egress gw policy connectivity works
+# K8sDatapathEgressGatewayTest tunnel vxlan with endpointRoutes enabled egress gw policy both egress gw and basic connectivity work
+# K8sDatapathEgressGatewayTest tunnel vxlan with endpointRoutes enabled egress gw policy with exclusion CIDRs Traffic is not SNATed with egress gateway IP
+# K8sDatapathEgressGatewayTest tunnel vxlan with endpointRoutes enabled no egress gw policy connectivity works
+###
+# 911
+# K8sDatapathServicesTest Checks N/S loadbalancing ClusterIP cannot be accessed externally when access is disabled
+# K8sDatapathServicesTest Checks N/S loadbalancing Supports IPv4 fragments
+# K8sDatapathServicesTest Checks N/S loadbalancing Tests externalIPs
+# K8sDatapathServicesTest Checks N/S loadbalancing Tests GH#10983
+# K8sDatapathServicesTest Checks N/S loadbalancing Tests NodePort with sessionAffinity from outside
+# K8sDatapathServicesTest Checks N/S loadbalancing Tests security id propagation in N/S LB requests fwd-ed over tunnel
+# K8sDatapathServicesTest Checks N/S loadbalancing Tests with direct routing and DSR
+# K8sDatapathServicesTest Checks N/S loadbalancing Tests with secondary NodePort device
+# K8sDatapathServicesTest Checks N/S loadbalancing Tests with TC, direct routing and Hybrid
+###
+# 912
+# K8sDatapathServicesTest Checks N/S loadbalancing Tests with XDP, direct routing, DSR and Maglev
+# K8sDatapathServicesTest Checks N/S loadbalancing Tests with XDP, direct routing, DSR and Random
+# K8sDatapathServicesTest Checks N/S loadbalancing Tests with XDP, direct routing, Hybrid and Maglev
+# K8sDatapathServicesTest Checks N/S loadbalancing Tests with XDP, direct routing, Hybrid and Random
+# K8sDatapathServicesTest Checks N/S loadbalancing Tests with XDP, direct routing, SNAT and Maglev
+# K8sDatapathServicesTest Checks N/S loadbalancing Tests with XDP, direct routing, SNAT and Random
+# K8sDatapathServicesTest Checks N/S loadbalancing Tests with XDP, vxlan tunnel, SNAT and Random
+# K8sDatapathServicesTest Checks N/S loadbalancing With ClusterIP external access ClusterIP can be accessed when external access is enabled
+# K8sDatapathServicesTest Checks N/S loadbalancing With host policy
+###
+# 92
+# K8sDatapathServicesTest Checks device reconfiguration Detects newly added device and reloads datapath
+# K8sDatapathServicesTest Checks E/W loadbalancing (ClusterIP, NodePort from inside cluster, etc) Checks in-cluster KPR Tests HealthCheckNodePort
+# K8sDatapathServicesTest Checks E/W loadbalancing (ClusterIP, NodePort from inside cluster, etc) Checks in-cluster KPR Tests that binding to NodePort port fails
+# K8sDatapathServicesTest Checks E/W loadbalancing (ClusterIP, NodePort from inside cluster, etc) Checks in-cluster KPR with L7 policy Tests NodePort with L7 Policy
+# K8sDatapathServicesTest Checks E/W loadbalancing (ClusterIP, NodePort from inside cluster, etc) Checks service accessing itself (hairpin flow)
+# K8sDatapathServicesTest Checks E/W loadbalancing (ClusterIP, NodePort from inside cluster, etc) Tests NodePort inside cluster (kube-proxy)
+# K8sDatapathServicesTest Checks E/W loadbalancing (ClusterIP, NodePort from inside cluster, etc) TFTP with DNS Proxy port collision
+# K8sDatapathServicesTest Checks E/W loadbalancing (ClusterIP, NodePort from inside cluster, etc) with L4 policy
+# K8sDatapathServicesTest Checks E/W loadbalancing (ClusterIP, NodePort from inside cluster, etc) with L7 policy
+###
+# 93
+# K8sDatapathBGPTests Tests LoadBalancer Connectivity to endpoint via LB
+# K8sDatapathCustomCalls Basic test with byte-counter Loads byte-counter and gets consistent values
+# K8sDatapathCustomCalls Basic test with byte-counter Loads byte-counter and gets consistent values, with per-endpoint routes
+# K8sDatapathLRPTests Checks local redirect policy LRP connectivity
+# K8sDatapathLRPTests Checks local redirect policy LRP restores service when removed
+###
+# 999
+# K8sUpdates Tests upgrade and downgrade from a Cilium stable image to master
+###
+# 999999
+# K8sKafkaPolicyTest Kafka Policy Tests KafkaPolicies
+###
+
+jobs:
+  setup-and-test:
+    runs-on: ubuntu-latest-4cores-16gb-22.04
+    name: Setup & Test
+    strategy:
+      fail-fast: false
+      max-parallel: 60
+      matrix:
+        include:
+          - name: '0-1'
+            kernel: 'bpf-next-20230328.094633@sha256:b3354f22514f552a504ec2cfc1105d73cffe4bb8408705b511fd8444327590ca'
+            k8s-version: '1.26'
+            focus: 'K8sAgentChaosTest'
+
+          - name: '0-2'
+            kernel: 'bpf-next-20230328.094633@sha256:b3354f22514f552a504ec2cfc1105d73cffe4bb8408705b511fd8444327590ca'
+            k8s-version: '1.26'
+            focus: 'K8sAgentFQDNTest|K8sAgentPerNodeConfigTest'
+
+          - name: '0-3'
+            kernel: 'bpf-next-20230328.094633@sha256:b3354f22514f552a504ec2cfc1105d73cffe4bb8408705b511fd8444327590ca'
+            k8s-version: '1.26'
+            focus: 'K8sAgentPolicyTest'
+            skip: 'K8sAgentPolicyTest Multi-node|K8sAgentPolicyTest Basic'
+
+          - name: '0-4'
+            kernel: 'bpf-next-20230328.094633@sha256:b3354f22514f552a504ec2cfc1105d73cffe4bb8408705b511fd8444327590ca'
+            k8s-version: '1.26'
+            focus: 'K8sAgentPolicyTest Multi-node'
+
+          - name: '0-5'
+            kernel: 'bpf-next-20230328.094633@sha256:b3354f22514f552a504ec2cfc1105d73cffe4bb8408705b511fd8444327590ca'
+            k8s-version: '1.26'
+            focus: 'K8sPolicyTestExtended|K8sAgentPolicyTest Basic'
+
+          - name: '0-61'
+            kernel: 'bpf-next-20230328.094633@sha256:b3354f22514f552a504ec2cfc1105d73cffe4bb8408705b511fd8444327590ca'
+            k8s-version: '1.26'
+            focus: 'K8sDatapathConfig Host firewall'
+
+          - name: '0-62'
+            kernel: 'bpf-next-20230328.094633@sha256:b3354f22514f552a504ec2cfc1105d73cffe4bb8408705b511fd8444327590ca'
+            k8s-version: '1.26'
+            focus: 'K8sDatapathConfig'
+            skip: 'K8sDatapathConfig Host firewall|K8sDatapathConfig Encapsulation Check iptables masquerading with random-fully|K8sDatapathConfig Encapsulation Check iptables masquerading without random-fully'
+            current-status: "Failing on test/k8s/datapath_configuration.go:167 likely because of IPv6"
+
+          - name: '0-7'
+            kernel: 'bpf-next-20230328.094633@sha256:b3354f22514f552a504ec2cfc1105d73cffe4bb8408705b511fd8444327590ca'
+            k8s-version: '1.26'
+            focus: 'K8sAgentHubbleTest|K8sDatapathBandwidthTest|K8sAgentIstioTest'
+            skip: 'K8sDatapathBandwidthTest Checks Bandwidth Rate-Limiting'
+            current-status: "The detection of /proc/sys/net/core/default_qdisc is making the K8sDatapathBandwidthTest to fail"
+
+          - name: '0-81'
+            kernel: 'bpf-next-20230328.094633@sha256:b3354f22514f552a504ec2cfc1105d73cffe4bb8408705b511fd8444327590ca'
+            k8s-version: '1.26'
+            focus: 'K8sDatapathEgressGatewayTest tunnel disabled'
+
+          - name: '0-82'
+            kernel: 'bpf-next-20230328.094633@sha256:b3354f22514f552a504ec2cfc1105d73cffe4bb8408705b511fd8444327590ca'
+            k8s-version: '1.26'
+            focus: 'K8sDatapathEgressGatewayTest tunnel vxlan'
+
+          - name: '0-911'
+            kernel: 'bpf-next-20230328.094633@sha256:b3354f22514f552a504ec2cfc1105d73cffe4bb8408705b511fd8444327590ca'
+            k8s-version: '1.26'
+            focus: 'K8sDatapathServicesTest Checks N/S loadbalancing'
+
+          - name: '0-912'
+            kernel: 'bpf-next-20230328.094633@sha256:b3354f22514f552a504ec2cfc1105d73cffe4bb8408705b511fd8444327590ca'
+            k8s-version: '1.26'
+
+          - name: '0-92'
+            kernel: 'bpf-next-20230328.094633@sha256:b3354f22514f552a504ec2cfc1105d73cffe4bb8408705b511fd8444327590ca'
+            k8s-version: '1.26'
+            focus: 'K8sDatapathServicesTest Checks E/W loadbalancing|K8sDatapathServicesTest Checks device reconfiguration'
+
+          - name: '0-93'
+            kernel: 'bpf-next-20230328.094633@sha256:b3354f22514f552a504ec2cfc1105d73cffe4bb8408705b511fd8444327590ca'
+            k8s-version: '1.26'
+            focus: 'K8sDatapathBGPTests|K8sDatapathCustomCalls|K8sDatapathLRPTests'
+
+          - name: '0-999'
+            kernel: 'bpf-next-20230328.094633@sha256:b3354f22514f552a504ec2cfc1105d73cffe4bb8408705b511fd8444327590ca'
+            k8s-version: '1.26'
+            focus: 'K8sUpdates'
+
+          - name: '0-999999'
+            kernel: 'bpf-next-20230328.094633@sha256:b3354f22514f552a504ec2cfc1105d73cffe4bb8408705b511fd8444327590ca'
+            k8s-version: '1.26'
+            focus: 'K8sKafkaPolicyTest'
+
+          - name: '1-1'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.25'
+            focus: 'K8sAgentChaosTest'
+
+          - name: '1-2'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.25'
+            focus: 'K8sAgentFQDNTest|K8sAgentPerNodeConfigTest'
+
+          - name: '1-3'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.25'
+            focus: 'K8sAgentPolicyTest'
+            skip: 'K8sAgentPolicyTest Multi-node|K8sAgentPolicyTest Basic'
+
+          - name: '1-4'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.25'
+            focus: 'K8sAgentPolicyTest Multi-node'
+
+          - name: '1-5'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.25'
+            focus: 'K8sPolicyTestExtended|K8sAgentPolicyTest Basic'
+
+          - name: '1-61'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.25'
+            focus: 'K8sDatapathConfig Host firewall'
+
+          - name: '1-62'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.25'
+            focus: 'K8sDatapathConfig'
+            skip: 'K8sDatapathConfig Host firewall|K8sDatapathConfig Encapsulation Check iptables masquerading with random-fully|K8sDatapathConfig Encapsulation Check iptables masquerading without random-fully'
+            current-status: "Failing on test/k8s/datapath_configuration.go:167 likely because of IPv6"
+
+          - name: '1-7'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.25'
+            focus: 'K8sAgentHubbleTest|K8sDatapathBandwidthTest|K8sAgentIstioTest'
+
+#            These tests require kernel net-next so there's no point on running them
+#          - name: '1-81'
+#            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+#            k8s-version: '1.25'
+#            focus: 'K8sDatapathEgressGatewayTest tunnel disabled'
+#
+#            These tests require are not intended to run on kernel 5.4, thus we can ignore them
+#          - name: '1-82'
+#            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+#            k8s-version: '1.25'
+#            focus: 'K8sDatapathEgressGatewayTest tunnel vxlan'
+#
+#            These tests require are not intended to run on kernel 5.4, thus we can ignore them
+#          - name: '1-91'
+#            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+#            k8s-version: '1.25'
+#            focus: 'K8sDatapathServicesTest Checks N/S loadbalancing'
+
+          - name: '1-92'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.25'
+            focus: 'K8sDatapathServicesTest Checks E/W loadbalancing|K8sDatapathServicesTest Checks device reconfiguration'
+
+          - name: '1-93'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.25'
+            focus: 'K8sDatapathBGPTests|K8sDatapathCustomCalls|K8sDatapathLRPTests'
+
+          - name: '1-999'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.25'
+            focus: 'K8sUpdates'
+
+          - name: '1-999999'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.25'
+            focus: 'K8sKafkaPolicyTest'
+
+#            These tests require are not intended to run on kernel 5.4, thus we can ignore them
+#          - name: '2-1'
+#            kernel: '5.4-20230328.094633@sha256:db98f5e6596227a9706bfb39ac783fdb1c55cb5b4a50e7f2397cef1b7adf6066'
+#            k8s-version: '1.24'
+#            focus: 'K8sAgentChaosTest'
+
+          - name: '2-2'
+            kernel: '5.4-20230328.094633@sha256:db98f5e6596227a9706bfb39ac783fdb1c55cb5b4a50e7f2397cef1b7adf6066'
+            k8s-version: '1.24'
+            focus: 'K8sAgentFQDNTest|K8sAgentPerNodeConfigTest'
+
+#            These tests require are not intended to run on kernel 5.4, thus we can ignore them
+#          - name: '2-3'
+#            kernel: '5.4-20230328.094633@sha256:db98f5e6596227a9706bfb39ac783fdb1c55cb5b4a50e7f2397cef1b7adf6066'
+#            k8s-version: '1.24'
+#            focus: 'K8sAgentPolicyTest'
+#            skip: 'K8sAgentPolicyTest Multi-node|K8sAgentPolicyTest Basic'
+#
+#            These tests require are not intended to run on kernel 5.4, thus we can ignore them
+#          - name: '2-4'
+#            kernel: '5.4-20230328.094633@sha256:db98f5e6596227a9706bfb39ac783fdb1c55cb5b4a50e7f2397cef1b7adf6066'
+#            k8s-version: '1.24'
+#            focus: 'K8sAgentPolicyTest Multi-node'
+
+          - name: '2-5'
+            kernel: '5.4-20230328.094633@sha256:db98f5e6596227a9706bfb39ac783fdb1c55cb5b4a50e7f2397cef1b7adf6066'
+            k8s-version: '1.24'
+            focus: 'K8sPolicyTestExtended|K8sAgentPolicyTest Basic'
+
+          - name: '2-61'
+            kernel: '5.4-20230328.094633@sha256:db98f5e6596227a9706bfb39ac783fdb1c55cb5b4a50e7f2397cef1b7adf6066'
+            k8s-version: '1.24'
+            focus: 'K8sDatapathConfig Host firewall'
+
+          - name: '2-62'
+            kernel: '5.4-20230328.094633@sha256:db98f5e6596227a9706bfb39ac783fdb1c55cb5b4a50e7f2397cef1b7adf6066'
+            k8s-version: '1.24'
+            focus: 'K8sDatapathConfig'
+            skip: 'K8sDatapathConfig Host firewall|K8sDatapathConfig Encapsulation Check iptables masquerading with random-fully|K8sDatapathConfig Encapsulation Check iptables masquerading without random-fully'
+            current-status: "Failing on test/k8s/datapath_configuration.go:167 likely because of IPv6"
+
+          - name: '2-7'
+            kernel: '5.4-20230328.094633@sha256:db98f5e6596227a9706bfb39ac783fdb1c55cb5b4a50e7f2397cef1b7adf6066'
+            k8s-version: '1.24'
+            focus: 'K8sAgentHubbleTest|K8sDatapathBandwidthTest|K8sAgentIstioTest'
+
+#            These tests require are not intended to run on kernel 5.4, thus we can ignore them
+#          - name: '2-81'
+#            kernel: '5.4-20230328.094633@sha256:db98f5e6596227a9706bfb39ac783fdb1c55cb5b4a50e7f2397cef1b7adf6066'
+#            k8s-version: '1.24'
+#            focus: 'K8sDatapathEgressGatewayTest tunnel disabled'
+#
+#            These tests require are not intended to run on kernel 5.4, thus we can ignore them
+#          - name: '2-82'
+#            kernel: '5.4-20230328.094633@sha256:db98f5e6596227a9706bfb39ac783fdb1c55cb5b4a50e7f2397cef1b7adf6066'
+#            k8s-version: '1.24'
+#            focus: 'K8sDatapathEgressGatewayTest tunnel vxlan'
+#
+#            These tests require are not intended to run on kernel 5.4, thus we can ignore them
+#          - name: '2-91'
+#            kernel: '5.4-20230328.094633@sha256:db98f5e6596227a9706bfb39ac783fdb1c55cb5b4a50e7f2397cef1b7adf6066'
+#            k8s-version: '1.24'
+#            focus: 'K8sDatapathServicesTest Checks N/S loadbalancing'
+#
+#            These tests require are not intended to run on kernel 5.4, thus we can ignore them
+#          - name: '2-92'
+#            kernel: '5.4-20230328.094633@sha256:db98f5e6596227a9706bfb39ac783fdb1c55cb5b4a50e7f2397cef1b7adf6066'
+#            k8s-version: '1.24'
+#            focus: 'K8sDatapathServicesTest Checks E/W loadbalancing|K8sDatapathServicesTest Checks device reconfiguration'
+#            # Currently flaky see https://github.com/cilium/cilium/issues/24648
+#            skip: 'K8sDatapathServicesTest Checks E/W loadbalancing \(ClusterIP, NodePort from inside cluster, etc\) Tests NodePort inside cluster \(kube-proxy\) with IPSec and externalTrafficPolicy=Local'
+#
+#            These tests require are not intended to run on kernel 5.4, thus we can ignore them
+#          - name: '2-93'
+#            kernel: '5.4-20230328.094633@sha256:db98f5e6596227a9706bfb39ac783fdb1c55cb5b4a50e7f2397cef1b7adf6066'
+#            k8s-version: '1.24'
+#            focus: 'K8sDatapathBGPTests|K8sDatapathCustomCalls|K8sDatapathLRPTests'
+
+          - name: '2-999'
+            kernel: '5.4-20230328.094633@sha256:db98f5e6596227a9706bfb39ac783fdb1c55cb5b4a50e7f2397cef1b7adf6066'
+            k8s-version: '1.24'
+            focus: 'K8sUpdates'
+
+#            These tests require are not intended to run on kernel 5.4, thus we can ignore them
+#          - name: '2-999999'
+#            kernel: '5.4-20230328.094633@sha256:db98f5e6596227a9706bfb39ac783fdb1c55cb5b4a50e7f2397cef1b7adf6066'
+#            k8s-version: '1.24'
+#            focus: 'K8sKafkaPolicyTest'
+
+          - name: '3-1'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.19'
+            focus: 'K8sAgentChaosTest'
+
+          - name: '3-2'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.19'
+            focus: 'K8sAgentFQDNTest|K8sAgentPerNodeConfigTest'
+
+          - name: '3-3'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.19'
+            focus: 'K8sAgentPolicyTest'
+            skip: 'K8sAgentPolicyTest Multi-node|K8sAgentPolicyTest Basic'
+
+          - name: '3-4'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.19'
+            focus: 'K8sAgentPolicyTest Multi-node'
+
+          - name: '3-5'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.19'
+            focus: 'K8sPolicyTestExtended|K8sAgentPolicyTest Basic'
+
+          - name: '3-61'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.19'
+            focus: 'K8sDatapathConfig Host firewall'
+
+          - name: '3-62'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.19'
+            focus: 'K8sDatapathConfig'
+            skip: 'K8sDatapathConfig Host firewall|K8sDatapathConfig Encapsulation Check iptables masquerading with random-fully|K8sDatapathConfig Encapsulation Check iptables masquerading without random-fully'
+            current-status: "Failing on test/k8s/datapath_configuration.go:167 likely because of IPv6"
+
+          - name: '3-7'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.19'
+            focus: 'K8sAgentHubbleTest|K8sDatapathBandwidthTest|K8sAgentIstioTest'
+
+#            These tests require are recent kernel version, so we can ignore them.
+#          - name: '3-81'
+#            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+#            k8s-version: '1.19'
+#            focus: 'K8sDatapathEgressGatewayTest tunnel disabled'
+#
+#            These tests require are recent kernel version, so we can ignore them.
+#          - name: '3-82'
+#            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+#            k8s-version: '1.19'
+#            focus: 'K8sDatapathEgressGatewayTest tunnel vxlan'
+#
+#            These tests require are recent kernel version, so we can ignore them.
+#          - name: '3-91'
+#            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+#            k8s-version: '1.19'
+#            focus: 'K8sDatapathServicesTest Checks N/S loadbalancing'
+
+          - name: '3-92'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.19'
+            focus: 'K8sDatapathServicesTest Checks E/W loadbalancing|K8sDatapathServicesTest Checks device reconfiguration'
+            skip: 'K8sDatapathServicesTest Checks E/W loadbalancing \(ClusterIP, NodePort from inside cluster, etc\)'
+            current-status: "K8sDatapathServicesTest Checks E/W loadbalancing (ClusterIP, NodePort from inside cluster, etc) is still unknown"
+
+          - name: '3-93'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.19'
+            focus: 'K8sDatapathBGPTests|K8sDatapathCustomCalls|K8sDatapathLRPTests'
+
+          - name: '3-999'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.19'
+            focus: 'K8sUpdates'
+
+          - name: '3-999999'
+            kernel: '4.19-20230328.094633@sha256:949403302894247558a3ca011643a6faf669cee4a5e30f344ffb50cb187c48cb'
+            k8s-version: '1.19'
+            focus: 'K8sKafkaPolicyTest'
+
+    timeout-minutes: 60
+    steps:
+      - name: Set up job variables
+        id: vars
+        run: |
+          if [ ${{ github.event.issue.pull_request || github.event.pull_request }} ]; then
+            PR_API_JSON=$(curl \
+              -H "Accept: application/vnd.github.v3+json" \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              ${{ github.event.issue.pull_request.url || github.event.pull_request.url }})
+            SHA=$(echo "$PR_API_JSON" | jq -r ".head.sha")
+          else
+            SHA=${{ github.sha }}
+          fi
+
+          echo "sha=${SHA}" >> $GITHUB_OUTPUT
+
+          ipfamily="dual"
+          case ${{ matrix.k8s-version }} in
+              1.26)
+                  kube_image="kindest/node:v1.26.0@sha256:691e24bd2417609db7e589e1a479b902d2e209892a10ce375fab60a8407c7352"
+                  ;;
+              1.25)
+                  kube_image="kindest/node:v1.25.3@sha256:f52781bc0d7a19fb6c405c2af83abfeb311f130707a0e219175677e366cc45d1"
+                  ;;
+              1.24)
+                  kube_image="kindest/node:v1.24.7@sha256:577c630ce8e509131eab1aea12c022190978dd2f745aac5eb1fe65c0807eb315"
+                  ;;
+              1.23)
+                  kube_image="kindest/node:v1.23.13@sha256:ef453bb7c79f0e3caba88d2067d4196f427794086a7d0df8df4f019d5e336b61"
+                  ;;
+              1.22)
+                  kube_image="kindest/node:v1.22.15@sha256:7d9708c4b0873f0fe2e171e2b1b7f45ae89482617778c1c875f1053d4cef2e41"
+                  ;;
+              1.21)
+                  kube_image="kindest/node:v1.21.14@sha256:9d9eb5fb26b4fbc0c6d95fa8c790414f9750dd583f5d7cee45d92e8c26670aa1"
+                  ;;
+              1.20)
+                  kube_image="kindest/node:v1.20.15@sha256:a32bf55309294120616886b5338f95dd98a2f7231519c7dedcec32ba29699394"
+                  ;;
+              1.19)
+                  kube_image="kindest/node:v1.19.16@sha256:476cb3269232888437b61deca013832fee41f9f074f9bed79f57e4280f7c48b7"
+                  ipfamily="ipv4"
+                  ;;
+              *)
+                  echo "Invalid k8s version"
+                  ;;
+          esac
+
+          echo "ipfamily=${ipfamily}" >> $GITHUB_OUTPUT
+          echo "kube_image=${kube_image}" >> $GITHUB_OUTPUT
+
+      - name: Checkout pull request for Helm chart
+        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
+        with:
+          ref: ${{ steps.vars.outputs.sha }}
+          persist-credentials: false
+
+      - name: Install cilium-cli
+        shell: bash
+        run: |
+          cid=$(docker create quay.io/cilium/cilium-cli-ci:latest ls)
+          docker cp $cid:/usr/local/bin/cilium ./cilium-cli
+          docker rm $cid
+
+      - name: Install helm
+        shell: bash
+        run: |
+          HELM_VERSION=3.7.0
+          wget "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz"
+          tar -xf "helm-v${HELM_VERSION}-linux-amd64.tar.gz"
+          mv ./linux-amd64/helm ./helm
+
+      - name: Provision LVH VMs
+        uses: cilium/little-vm-helper@0b7d7157dae56a44dc531c852e7756dc671071af # v0.0.3
+        with:
+          test-name: datapath-conformance
+          image-version: ${{ matrix.kernel }}
+          host-mount: ./
+          cpu: 4
+          mem: 12G
+          dns-resolver: '1.1.1.1'
+          install-dependencies: 'true'
+          cmd: |
+            git config --global --add safe.directory /host
+
+      - name: Wait for images to be available
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          for image in cilium-ci operator-generic-ci hubble-relay-ci ; do
+            until docker manifest inspect quay.io/${{ github.repository_owner }}/$image:89f9525dc7ce42d81fd6ef794207c0ce996f02ab &> /dev/null; do sleep 45s; done
+          done
+
+      - name: Install dependencies in little-vm-helper
+        uses: cilium/little-vm-helper@0b7d7157dae56a44dc531c852e7756dc671071af # v0.0.3
+        with:
+          provision: 'false'
+          cmd: |
+            cd /host/
+            sudo apt-get install -y jq wget
+            mv ./helm /usr/bin
+            go install github.com/onsi/ginkgo/ginkgo@v1.16.5
+
+      - name: Provision kind
+        timeout-minutes: 5
+        uses: cilium/little-vm-helper@0b7d7157dae56a44dc531c852e7756dc671071af # v0.0.3
+        with:
+          provision: 'false'
+          cmd: |
+            cd /host/
+            if [[ ${{ matrix.kernel }} == bpf-next-* ]]; then
+              ./contrib/scripts/kind.sh "" 2 "" "${{ steps.vars.outputs.kube_image }}" "none" "${{ steps.vars.outputs.ipfamily }}"
+              kubectl label node kind-worker2 cilium.io/ci-node=kind-worker2
+              # Avoid re-labeling this node by setting "node-role.kubernetes.io/controlplane"
+              kubectl label node kind-worker2 node-role.kubernetes.io/controlplane=
+            else
+              ./contrib/scripts/kind.sh "" 1 "" "${{ steps.vars.outputs.kube_image }}" "iptables" "${{ steps.vars.outputs.ipfamily }}"
+            fi
+            # Some tests using demo-customcalls.yaml are mounting this directoy
+            mkdir -p /home/vagrant/go/src/github.com/cilium
+            ln -s /host /home/vagrant/go/src/github.com/cilium/cilium
+            git config --add safe.directory /cilium
+
+      - name: Run tests
+        timeout-minutes: 40
+        uses: cilium/little-vm-helper@0b7d7157dae56a44dc531c852e7756dc671071af # v0.0.3
+        with:
+          provision: 'false'
+          cmd: |
+            cd /host/test/
+            kubectl get ns -A -o wide
+            kubectl get pods -A -o wide
+            if [[ ${{ matrix.kernel }} == bpf-next-* ]]; then
+               export KERNEL=net-next
+               export NETNEXT=1
+               export KUBEPROXY=0
+               export K8S_NODES=3
+               export NO_CILIUM_ON_NODES=kind-worker2
+            elif [[ ${{ matrix.kernel }} == 4.19-* ]]; then
+               export KERNEL=419
+            elif [[ ${{ matrix.kernel }} == 5.4-* ]]; then
+               export KERNEL=54
+            fi
+            export CNI_INTEGRATION=kind
+            echo "K8S_VERSION=${{ matrix.k8s-version }} /root/go/bin/ginkgo \
+             --focus=\"${{ matrix.focus }}\" \
+             --skip=\"${{ matrix.skip }}\" \
+             --seed=1679952881 \
+             -v -- \
+             -cilium.provision=false \
+             --cilium.image=quay.io/${{ github.repository_owner }}/cilium-ci \
+             -cilium.tag=89f9525dc7ce42d81fd6ef794207c0ce996f02ab  \
+             --cilium.operator-image=quay.io/${{ github.repository_owner }}/operator \
+             -cilium.operator-tag=89f9525dc7ce42d81fd6ef794207c0ce996f02ab \
+             --cilium.hubble-relay-image=quay.io/${{ github.repository_owner }}/hubble-relay-ci \
+             -cilium.hubble-relay-tag=89f9525dc7ce42d81fd6ef794207c0ce996f02ab \
+             -cilium.kubeconfig=/root/.kube/config \
+             -cilium.provision-k8s=false \
+             -cilium.operator-suffix=-ci"
+            K8S_VERSION=${{ matrix.k8s-version }} /root/go/bin/ginkgo \
+             --focus="${{ matrix.focus }}" \
+             --skip="${{ matrix.skip }}" \
+             --seed=1679952881 \
+             -v -- \
+             -cilium.provision=false \
+             --cilium.image=quay.io/${{ github.repository_owner }}/cilium-ci \
+             -cilium.tag=89f9525dc7ce42d81fd6ef794207c0ce996f02ab  \
+             --cilium.operator-image=quay.io/${{ github.repository_owner }}/operator \
+             -cilium.operator-tag=89f9525dc7ce42d81fd6ef794207c0ce996f02ab \
+             --cilium.hubble-relay-image=quay.io/${{ github.repository_owner }}/hubble-relay-ci \
+             -cilium.hubble-relay-tag=89f9525dc7ce42d81fd6ef794207c0ce996f02ab \
+             -cilium.kubeconfig=/root/.kube/config \
+             -cilium.provision-k8s=false \
+             -cilium.operator-suffix=-ci
+
+      - name: Fetch artifacts
+        if: ${{ !success() }}
+        uses: cilium/little-vm-helper@0b7d7157dae56a44dc531c852e7756dc671071af # v0.0.3
+        with:
+          provision: 'false'
+          cmd: |
+            cd /host
+            kubectl get pods --all-namespaces -o wide
+            ls -la /proc/sys/net
+            ls -la /proc/sys/net/core
+            cat /proc/sys/net/core/default_qdisc
+            ./cilium-cli status
+            mkdir -p cilium-sysdumps
+            tar -zcf test_results-${{ matrix.name }}.tar.gz /host/test/test_results
+            ./cilium-cli sysdump --output-filename cilium-sysdump-${{ matrix.name }}-final
+
+      - name: Upload artifacts
+        if: ${{ !success() }}
+        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
+        with:
+          name: cilium-sysdumps
+          path: |
+            cilium-sysdump-*.zip
+            bugtool-*.tar.gz
+            test_results-*.tar.gz
+          retention-days: 5
+
