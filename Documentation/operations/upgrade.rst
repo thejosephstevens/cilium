@@ -316,7 +316,8 @@ Annotations:
 Removed Options
 ~~~~~~~~~~~~~~~
 
-The ``sockops-enable`` option is removed
+* The ``sockops-enable`` option was removed.
+* The ``force-local-policy-eval-at-source`` option deprecated in version 1.13 was removed.
 
 Added Metrics
 ~~~~~~~~~~~~~
