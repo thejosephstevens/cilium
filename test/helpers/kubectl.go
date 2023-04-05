@@ -642,18 +642,9 @@ func (kub *Kubectl) labelNodes() error {
 		return fmt.Errorf("unable to unmarshal string slice '%#v': %s", nodesList, err)
 	}
 
-	var (
-		index int = 1
-
-		noCiliumNode     = GetNodeWithoutCilium()
-		noCiliumNodeName string
-	)
+	index := 1
 	for _, nodeName := range nodesList {
 		ciNodeName := fmt.Sprintf("k8s%d", index)
-		if GetNodeWithoutCilium() == ciNodeName {
-			noCiliumNodeName = nodeName
-		}
-
 		cmd := fmt.Sprintf("%s label --overwrite node %s cilium.io/ci-node=%s", KubectlCmd, nodeName, ciNodeName)
 		res := kub.ExecShort(cmd)
 		if !res.WasSuccessful() {
@@ -662,10 +653,10 @@ func (kub *Kubectl) labelNodes() error {
 		index++
 	}
 
-	if noCiliumNode != "" {
+	if nodeWithoutCilium := GetNodeWithoutCilium(); nodeWithoutCilium != "" {
 		// Prevent scheduling any pods on the node, as it will be used as an external client
 		// to send requests to k8s{1,2}
-		cmd := fmt.Sprintf("%s taint --overwrite nodes %s key=value:NoSchedule", KubectlCmd, noCiliumNodeName)
+		cmd := fmt.Sprintf("%s taint --overwrite node %s prevent-scheduling:NoSchedule", KubectlCmd, nodeWithoutCilium)
 		res := kub.ExecMiddle(cmd)
 		if !res.WasSuccessful() {
 			return fmt.Errorf("unable to taint node with '%s': %s", cmd, res.OutputPrettyPrint())
